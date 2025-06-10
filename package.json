@@ -1,0 +1,48 @@
+{
+    "name": "svelte-prop-manager",
+    "displayName": "Svelte Prop Manager",
+    "description": "Kezeld és szerkeszd a Svelte komponens propokat könnyedén.",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.70.0"
+    },
+    "activationEvents": [
+        "onView:myWebviewView"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "panel": [
+                {
+                    "id": "mySecondarySidebar",
+                    "title": "My Sidebar",
+                    "icon": "media/icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "mySecondarySidebar": [
+                {
+                    "type": "webview",
+                    "id": "myWebviewView",
+                    "name": "My Right Panel"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src",
+        "test": "vscode-test",
+        "build": "cd svelte-ui && npm run build && cd.."
+    },
+    "devDependencies": {
+        "@types/node": "^22.15.3",
+        "@types/vscode": "^1.70.0",
+        "typescript": "^4.8.0",
+        "vsce": "^2.11.0"
+    }
+}
