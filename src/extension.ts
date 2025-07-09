@@ -2,41 +2,59 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     const filePath = path.join(context.extensionPath, 'media', 'index.html');
     const str = fs.readFileSync(filePath, 'utf8');
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('myWebviewView', {
             resolveWebviewView(webviewView) {
+                const postMsg = registerMessagePoster(webviewView);
                 webviewView.webview.options = {
                     enableScripts: true,
                 };
 
                 webviewView.webview.html = str;
 
-                const activeEditor = vscode.window.activeTextEditor;
-                const fileName = activeEditor?.document?.fileName ?? 'Nincs aktív fájl';
+                postFileUpdate();
+                postSaveData();
 
-                webviewView.webview.postMessage({
-                    command: 'activeFile',
-                    fileName,
-                    document: activeEditor?.document,
-                    text: activeEditor?.document.getText(),
+                vscode.window.onDidChangeActiveTextEditor(() => {
+                    postFileUpdate();
                 });
 
-                vscode.window.onDidChangeActiveTextEditor((editor) => {
-                    const fileName = editor?.document?.fileName ?? 'Nincs aktív fájl';
-                    webviewView.webview.postMessage({
-                        command: 'activeFile',
-                        fileName,
-                        document: editor?.document,
-                        text: editor?.document.getText(),
-                    });
+                let changeTimeout: NodeJS.Timeout | undefined;
+
+                vscode.workspace.onDidChangeTextDocument((event) => {
+                    const activeEditor = vscode.window.activeTextEditor;
+                    if (activeEditor && event.document === activeEditor.document) {
+                        if (changeTimeout) clearTimeout(changeTimeout);
+                        changeTimeout = setTimeout(() => {
+                            postFileUpdate();
+                        }, 500); // csak 500ms szünet után fut le
+                    }
+                });
+
+                vscode.workspace.onDidSaveTextDocument((document) => {
+                    const activeEditor = vscode.window.activeTextEditor;
+                    if (activeEditor && document === activeEditor.document) {
+                        postFileUpdate();
+                    }
+                });
+
+                webviewView.onDidChangeVisibility(() => {
+                    if (webviewView.visible) {
+                        postFileUpdate();
+                        postSaveData();
+                    }
                 });
 
                 webviewView.webview.onDidReceiveMessage(async (message) => {
-                    if (message.command === 'propChange') {
+                    const { command, data } = message as { command: string, data: any };
+
+                    console.log('onDidReceiveMessage', command, data);
+
+                    if (command === 'propChange') {
                         const editor = vscode.window.activeTextEditor;
 
                         if (editor) {
@@ -46,18 +64,61 @@ export function activate(context: vscode.ExtensionContext) {
                             );
 
                             await editor.edit((editBuilder) => {
-                                editBuilder.replace(fullRange, message.text);
+                                editBuilder.replace(fullRange, data);
                             });
 
-                            await vscode.commands.executeCommand('editor.action.formatDocument');
-                            await editor.document.save();
+                            let readData = context.workspaceState.get('data') as { autoSave: boolean | undefined };
+
+                            let autoSave = readData?.autoSave;
+
+                            if (autoSave) {
+                                await editor.document.save();
+                            }
                         }
+                    } else if (command === 'save') {
+                        context.workspaceState.update('data', data);
                     }
                 });
+
+                function postFileUpdate() {
+                    const activeEditor = vscode.window.activeTextEditor;
+                    if (activeEditor) {
+                        const fileName = activeEditor?.document?.fileName ?? 'Nincs aktív fájl';
+
+                        const msg/* : Message */ = {
+                            command: 'activeFile',
+                            data: {
+                                fileName: fileName,
+                                document: activeEditor?.document,
+                                text: activeEditor?.document.getText(),
+                            },
+
+                        };
+
+                        postMsg(msg)
+                    }
+                }
+
+                function postSaveData() {
+                    const savedData = context.workspaceState.get('data');
+                    postMsg({
+                        command: 'load',
+                        data: savedData
+                    })
+                }
             },
         })
     );
 }
 
+const registerMessagePoster = (webviewView: vscode.WebviewView) => {
+    const func = (message: any) => {
+        console.log('postMessage', message);
+        webviewView.webview.postMessage(message);
+    }
+
+    return func;
+}
+
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }

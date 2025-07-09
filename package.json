@@ -2,21 +2,21 @@
     "name": "svelte-prop-manager",
     "displayName": "Svelte Prop Manager",
     "description": "Kezeld és szerkeszd a Svelte komponens propokat könnyedén.",
-    "version": "0.0.1",
+    "version": "0.0.2",
+    "icon": "images/icon.png",
+    "publisher": "tichss",
     "engines": {
         "vscode": "^1.70.0"
     },
-    "activationEvents": [
-        "onView:myWebviewView"
-    ],
+    "activationEvents": [],
     "main": "./out/extension.js",
     "contributes": {
         "viewsContainers": {
             "panel": [
                 {
                     "id": "mySecondarySidebar",
-                    "title": "My Sidebar",
-                    "icon": "media/icon.svg"
+                    "title": "Svelte Prop Manager",
+                    "icon": "images/icon.svg"
                 }
             ]
         },
@@ -25,7 +25,8 @@
                 {
                     "type": "webview",
                     "id": "myWebviewView",
-                    "name": "My Right Panel"
+                    "name": "My Right Panel",
+                    "icon": "images/icon.svg"
                 }
             ]
         }

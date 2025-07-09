@@ -1,25 +1,17 @@
 <script lang="ts">
-    import { untrack } from 'svelte';
+        import Dialog from '$coreComponents/Dialog.svelte';
+    import Icon from '$coreComponents/Icon.svelte';
+    import type MinimalTableManager from '$coreComponents/MinimalDataTable/MinimalTableManager.svelte';
+    import { type ComponentProps, type Snippet } from 'svelte';
+    import Tippy2 from '$coreComponents/Tippy/Tippy2.svelte';
+    import { dropdown } from '$coreComponents/Tippy/tippyProps';
+    import TippyContainer from '$coreComponents/Tippy/TippyContainer.svelte';
+    import TippyRow from '$coreComponents/Tippy/TippyRow.svelte';
+    import TableSettingDialog from '$coreComponents/MinimalDataTable/TableSettingDialog.svelte';
+    import type { TitleObj } from '$src/lib/types';
+    /* ezt a rész kellene megtalálni */
 
-    interface Props {
-        value?: number;
-        min?: any;
-        max?: number;
-        step?: number;
-        dataListStep?: number | undefined;
-        title?: string | undefined;
-        postfix?: string | undefined;
-    }
-
-    let {
-        value = $bindable(0),
-        min = -100,
-        max = 100,
-        step = 1,
-        dataListStep = undefined,
-        title = undefined,
-        postfix = undefined,
-    }: Props = $props();
+    ...
 
     /* let id = 'csuszka - ' + Math.random(); */
     let datalistId = 'datalist - ' + Math.random();

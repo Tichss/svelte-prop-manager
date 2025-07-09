@@ -1,13 +1,20 @@
 <script lang="ts">
-    import { onMount, untrack } from 'svelte';
+    import { untrack } from 'svelte';
     import '$lib/vscode.css';
+    import type { Message, Prop } from '$lib/type';
+    import VscodeButton from '$lib/ui/VscodeButton.svelte';
+    import VscodeTextField from '$lib/ui/VscodeTextField.svelte';
+    import DeleteIcon from 'svelte-google-materialdesign-icons/Delete.svelte';
+    import ActiveButton from '$lib/ui/ActiveButton.svelte';
+    import ToggleButtonGroup from '$lib/ToggleButton/ToggleButtonGroup.svelte';
+    import ToggleButton from '$lib/ToggleButton/ToggleButton.svelte';
+    import { flip } from 'svelte/animate';
+    import { insertAfterLastImport } from '$lib/functions';
+    import Test from '$lib/pages/Test.svelte';
+    import TestButtons from '$lib/TestButtons.svelte';
 
-    import src from './Csuszka.svelte?raw';
-    import src2 from './ExtraButtons.svelte?raw';
-    import src3 from './AddEventDialog.svelte?raw';
-
-    let rawText = $state('src');
-    let test = $state(false);
+    let rawText = $state('');
+    let test = $state(import.meta.env.DEV);
 
     let vscode: ReturnType<typeof acquireVsCodeApi> | undefined = undefined;
 
@@ -15,18 +22,13 @@
         vscode = (window as any).acquireVsCodeApi();
     }
 
-    let props: {
-        name: string;
-        type: string;
-        value?: string;
-        bindable?: boolean;
-        nullable?: boolean;
-    }[] = $state([]);
+    let props: Prop[] = $state([]);
 
-    function getPropNameList() {
+    async function getPropNameList() {
         props = [];
 
         const propsRegex = /let\s*{([\s\S]+?)}\s*:\s*(\w+)\s*=\s*\$props\(\);/;
+
         const propsMatch = rawText.match(propsRegex);
 
         if (propsMatch) {
@@ -46,6 +48,7 @@
                 name = name.trim();
                 val = val?.trim();
 
+                props[i].id = name;
                 props[i].name = name;
                 props[i].bindable = val?.startsWith('$bindable(');
 
@@ -57,7 +60,13 @@
                 }
             }
 
-            const interfaceRegex = new RegExp(`interface ${interfaceName}\\s*{([\\s\\S]*?)}`);
+            const interfaceRegex = new RegExp(
+                `\\b(?:interface|type)\\s+${interfaceName}\\b` + // 1. és 2. pont
+                    `[^\\{]*` + // Szerepelhet bármilyen karakter, az első '{'-ig
+                    `\\{` + // Az első '{'
+                    `([\\s\\S]*?)` + // A keresett tartalom (Capture Group 1)
+                    `\\}` // A hozzá tartozó '}'
+            );
 
             const interfaceMatch = rawText.match(interfaceRegex);
 
@@ -71,7 +80,8 @@
 
                 for (let i = 0; i < interfaceBodyArr.length; i++) {
                     const element = interfaceBodyArr[i];
-                    const [name, type] = element.split(':');
+
+                    const [name, type] = sliceStringAtIndex(element, element.indexOf(':'));
 
                     let tempName = name.trim();
                     let tempNullable = false;
@@ -87,27 +97,41 @@
                     for (let j = 0; j < props.length; j++) {
                         const prop = props[j];
 
-                        if (prop.name == tempName) {
+                        if (prop.name.split(':')[0] == tempName) {
                             prop.type = tempType;
                             prop.nullable = tempNullable;
                         }
                     }
                 }
             }
-
-            console.log(props);
         } else {
             ('nincs props');
         }
     }
 
     function setRawText() {
-        const propsRegex = /let\s*{([^}]+)}\s*:\s*(\w+)\s*=\s*\$props\(\);/;
-        let interfaceName = undefined;
+        const propsRegex = /let\s*({[\s\S]*?})\s*:\s*([\w\d_]+)\s*=\s*\$props\(\);/;
 
-        let replaced = rawText.replace(propsRegex, (match, propList, interfaceName2) => {
+        let _rawText = rawText;
+
+        if (!propsRegex.test(_rawText)) {
+            let interface2 = `interface Props { }`;
+            let prop = `let { }:Props = $props();`;
+
+            _rawText = insertAfterLastImport(_rawText, [interface2, prop]);
+        }
+
+        const talalat = propsRegex.exec(_rawText);
+
+        if (talalat) {
+            console.log('Talált szöveg:', talalat);
+
+            const wholeProps = talalat[0];
+            const propListWithBrackets = talalat[1];
+            const interfaceName = talalat[2];
+            const propList = propListWithBrackets.slice(1, -1);
+
             let propStrArr = [];
-            interfaceName = interfaceName2;
 
             for (let i = 0; i < props.length; i++) {
                 const prop = props[i];
@@ -124,59 +148,238 @@
                 }
             }
 
-            const finalStr = propStrArr.join(', ');
+            let spacekLead = ' ';
+            let spacekEnd = ' ';
 
-            return match.replace(propList, finalStr);
-        });
-
-        const interfaceRegex = new RegExp(`interface ${interfaceName}\\s*{([\\s\\S]*?)}`);
-
-        replaced = replaced.replace(interfaceRegex, (match, typeList) => {
-            let typeStrArr = [];
-
-            for (let i = 0; i < props.length; i++) {
-                const prop = props[i];
-                if (prop.name) {
-                    let strType = prop.name;
-
-                    if (prop.nullable) {
-                        strType += '?';
-                    }
-
-                    strType += `: ${prop.type}`;
-
-                    typeStrArr.push(strType);
-                }
+            if (propList.trim() !== '') {
+                spacekLead = getLeadingWhitespace(propList);
+                spacekEnd = getTrailingWhitespace(propList);
             }
 
-            const finalStr = typeStrArr.join('; ');
+            let valaszto = ',' + spacekLead;
 
-            return match.replace(typeList, finalStr);
-        });
+            let finalStr = propStrArr.join(valaszto);
+            finalStr = `{${spacekLead}${finalStr}${spacekEnd}}`;
+            console.log('propListWithBrackets', propListWithBrackets);
+            console.log('finalStr', finalStr);
 
-        console.log('DP MESSAGE');
-        vscode?.postMessage({
+            let temp = wholeProps.replace(propListWithBrackets, finalStr);
+
+            _rawText = _rawText.replace(wholeProps, temp);
+
+            const interfaceRegex = new RegExp(
+                `\\b(?:interface|type)\\s+${interfaceName}\\b` + // 1. és 2. pont
+                    `[^\\{]*` + // Szerepelhet bármilyen karakter, az első '{'-ig
+                    `(` + // Befogó csoport kezdete (Capture Group 1)
+                    `\\{` + // Az első '{'
+                    `[\\s\\S]*?` + // A keresett tartalom
+                    `\\}` + // A hozzá tartozó '}'
+                    `)` // Befogó csoport vége
+            );
+
+            const talalat2 = interfaceRegex.exec(_rawText);
+
+            if (talalat2) {
+                // console.log('talalat2', talalat2);
+
+                const wholeTypes = talalat2[0];
+                const typeListWithBrackets = talalat2[1];
+                const typeList = typeListWithBrackets.slice(1, -1);
+
+                let typeStrArr = [];
+
+                for (let i = 0; i < props.length; i++) {
+                    const prop = props[i];
+                    if (prop.name && !prop.name.startsWith('...')) {
+                        let strType = prop.name.split(':')[0];
+
+                        if (prop.nullable) {
+                            strType += '?';
+                        }
+
+                        strType += `: ${prop.type}`;
+
+                        typeStrArr.push(strType);
+                    }
+                }
+
+                let spacekLead = ' ';
+                let spacekEnd = ' ';
+
+                if (typeList.trim() !== '') {
+                    spacekLead = getLeadingWhitespace(typeList);
+                    spacekEnd = getTrailingWhitespace(typeList);
+                }
+
+                let valaszto = ';' + spacekLead;
+
+                let finalStr = typeStrArr.join(valaszto);
+
+                finalStr = `{${spacekLead}${finalStr}${spacekEnd}}`;
+
+                let temp = wholeTypes.replace(typeListWithBrackets, finalStr);
+
+                _rawText = _rawText.replace(wholeTypes, temp);
+            }
+        }
+
+        postMsg({
             command: 'propChange',
-            text: replaced,
+            data: _rawText,
         });
+
+        rawText = _rawText;
     }
 
-    function change() {
-        setRawText();
+    function getLeadingWhitespace(block: string): string {
+        let ws = '';
+        for (let i = 0; i < block.length; i++) {
+            const char = block[i];
+            if (/\s/.test(char)) {
+                ws += char;
+            } else {
+                break;
+            }
+        }
+        return ws;
     }
 
-    /* onMount(() => {
-        getPropNameList();
-    }); */
+    function getTrailingWhitespace(block: string): string {
+        let ws = '';
+        for (let i = block.length - 1; i >= 0; i--) {
+            const char = block[i];
+            if (/\s/.test(char)) {
+                ws = char + ws;
+            } else {
+                break;
+            }
+        }
+        return ws;
+    }
+
+    function sliceStringAtIndex(str: string, index: number) {
+        if (index < 0 || index >= str.length) {
+            console.warn('Az index kívül esik a string határain. Üres stringet ad vissza.');
+            return ['', ''] as const;
+        }
+
+        const firstPart = str.slice(0, index);
+        const secondPart = str.slice(index + 1); // Az index+1 miatt az adott karakter kimarad
+
+        return [firstPart, secondPart] as const;
+    }
 
     function addProp() {
-        props.push({
-            name: 'var12345',
+        let count = getNextPostfix(
+            props.map((p) => p.name),
+            'var'
+        );
+
+        let newProp = {
+            id: `var${count}`,
+            name: `var${count}`,
             type: 'string',
             nullable: true,
             bindable: false,
-        });
+        };
+
+        let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
+        console.log(insertIndex);
+
+        if (insertIndex > -1) {
+            props.splice(insertIndex, 0, newProp);
+        } else {
+            props.push(newProp);
+        }
         setRawText();
+    }
+
+    function addEvent() {
+        let count = getNextPostfix(
+            props.map((p) => p.name),
+            'onEvent'
+        );
+
+        let newProp = {
+            id: `onEvent${count}`,
+            name: `onEvent${count}`,
+            type: '() => any',
+            nullable: true,
+            bindable: false,
+        };
+
+        let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
+
+        if (insertIndex > -1) {
+            props.splice(insertIndex, 0, newProp);
+        } else {
+            props.push(newProp);
+        }
+
+        setRawText();
+    }
+
+    function addSnippet() {
+        let index = getNextPostfix(
+            props.map((p) => p.name),
+            'snippet'
+        );
+
+        let newProp = {
+            id: `snippet${index}`,
+            name: `snippet${index}`,
+            type: `import('svelte').Snippet<[any]>`,
+            nullable: true,
+            bindable: false,
+        };
+
+        let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
+
+        if (insertIndex > -1) {
+            props.splice(insertIndex, 0, newProp);
+        } else {
+            props.push(newProp);
+        }
+        setRawText();
+    }
+
+    function order() {
+        props = props.toSorted((a, b) => {
+            function getOrder(prop: Prop) {
+                if (prop?.name?.startsWith('...')) return 7;
+                if (prop?.type?.includes('Snippet')) return 6;
+                if (prop?.name?.startsWith('on') || prop?.type?.startsWith('(')) return 5;
+                if (prop.bindable && !prop.nullable) return 1;
+                if (prop.bindable) return 2;
+                if (!prop.nullable) return 3;
+                return 4;
+            }
+            const orderA = getOrder(a);
+            const orderB = getOrder(b);
+            return orderA - orderB;
+        });
+
+        setRawText();
+    }
+
+    function getNextPostfix(arr: string[], prefix: string) {
+        arr = arr.filter((item) => item.startsWith(prefix));
+        let nums = arr.map((p) => {
+            let str = p.substring(prefix.length);
+
+            if (!isNaN(+str)) {
+                return +str;
+            }
+            return 0;
+        });
+
+        let max = 0;
+
+        if (nums.length) {
+            max = Math.max(...nums) + 1;
+        }
+
+        return max;
     }
 
     let propString = $state('');
@@ -189,10 +392,14 @@
             for (let i = 0; i < props.length; i++) {
                 const prop = props[i];
                 propString += prop.name;
-                if (prop.nullable) {
-                    propString += '?';
+
+                if (prop.type) {
+                    if (prop.nullable) {
+                        propString += '?';
+                    }
+
+                    propString += `: ${prop.type}`;
                 }
-                propString += `: ${prop.type}`;
 
                 let tempValue = prop.value;
 
@@ -210,7 +417,7 @@
     });
 
     function textAreaChange(e) {
-        let val = e.target.value;
+        let val = e.target.value as string;
         let strArr = val.split(';').filter((n) => n.trim() !== '');
 
         props = [];
@@ -220,7 +427,9 @@
             props[i] = {};
             const prop = props[i];
 
-            let [namePlusType, value] = str.split('=');
+            let [namePlusType, value] = str.split(/=(?!>)/);
+
+            console.log(namePlusType, value);
 
             if (value) {
                 value = value.trim();
@@ -235,7 +444,7 @@
                 prop.value = value;
             }
 
-            let [name, type] = namePlusType.split(':');
+            let [name, type] = sliceStringAtIndex(namePlusType, namePlusType.indexOf(':'));
 
             name = name.trim();
             type = type.trim();
@@ -245,155 +454,334 @@
                 name = name.slice(0, -1);
             }
 
+            prop.id = name;
             prop.name = name;
             prop.type = type;
         }
         setRawText();
     }
+
+    function postMsg(msg: Message) {
+        let _msg = $state.snapshot(msg);
+        console.log('DP MEASSGE', _msg);
+        vscode?.postMessage(_msg);
+    }
+
+    let fileName: string | undefined = $state();
+
+    const svelteFile = $derived(getExtension(fileName ?? '') === '.svelte');
+
+    function getExtension(fileName: string) {
+        // Levágja a query paramétereket, ha vannak
+        const cleanName = fileName.split('?')[0];
+        const parts = cleanName.split('.');
+        return parts.length > 1 ? '.' + parts.pop() : undefined;
+    }
+
+    let propsWidth: number | undefined = $state();
+    const elegKicsi = $derived((propsWidth ?? 10000) < 350);
+
+    let savedDatas = $state<{ autoSave?: boolean }>({});
+    let autoSave: boolean = $state(false);
+    let view: 'grid' | 'textarea' | 'test' = $state('grid');
 </script>
 
 <svelte:window
     onmessage={(e) => {
-        const message = e?.data;
+        const msg = e?.data as Message;
+        const { command, data } = msg;
 
-        if (message.command === 'activeFile') {
-            rawText = message?.text;
+        if (command === 'activeFile') {
+            rawText = data.text;
+            fileName = data.fileName;
             getPropNameList();
+        } else if (command === 'load') {
+            savedDatas = data ?? {};
+            autoSave = savedDatas?.autoSave ?? false;
         }
     }}
 />
 
-{#if test}
-    <div class="test">
-        <button
-            onclick={() => {
-                rawText = src3;
-                getPropNameList();
-            }}
-        >
-            rawTextset
-        </button>
-        <button
-            onclick={() => {
-                rawText = src;
-                getPropNameList();
-            }}
-        >
-            rawTextset
-        </button>
-    </div>
-{/if}
+<div class:test class="bg">
+    {#if test}
+        <TestButtons />
+    {/if}
 
-<!-- 
-<button
-    onclick={() => {
-        rawText = src2;
-        getPropNameList();
-    }}
->
-    rawTextset2
-</button> -->
+    {#if svelteFile}
+        <div class="flex">
+            <div class="head">
+                <ActiveButton
+                    active={autoSave}
+                    onClick={() => {
+                        autoSave = !autoSave;
+                        savedDatas.autoSave = autoSave;
+                        postMsg({ command: 'save', data: savedDatas });
+                    }}
+                >
+                    Auto mentés
+                </ActiveButton>
 
-<textarea value={propString} onchange={textAreaChange} />
+                <ActiveButton onClick={order}>Rendezés</ActiveButton>
 
-<form action="" onchange={change}>
-    {#each props as prop, i}
-        <div class="prop">
-            <input class="text" type="text" bind:value={prop.name} />
-            <input class="text" type="text" bind:value={prop.type} list="types" />
-            <input type="checkbox" bind:checked={prop.nullable} />
-            <input class="text" type="text" bind:value={prop.value} />
-            <input type="checkbox" bind:checked={prop.bindable} />
-            <button
-                type="button"
-                onclick={() => {
-                    props = props.filter((item, j) => i != j);
-                    setRawText();
-                }}
-            >
-                Del
-            </button>
+                <div class="end">
+                    <ToggleButtonGroup bind:value={view}>
+                        <ToggleButton value="grid">grid</ToggleButton>
+                        <ToggleButton value="textarea">sor</ToggleButton>
+                        {#if test}
+                            <ToggleButton value="test">test</ToggleButton>
+                        {/if}
+                    </ToggleButtonGroup>
+                </div>
+            </div>
+
+            <div class="middle">
+                {#if view === 'grid'}
+                    <form action="" onchange={setRawText}>
+                        <div class="props" bind:clientWidth={propsWidth}>
+                            {#each props as prop, i (prop.id)}
+                                <div
+                                    animate:flip={{ duration: 250 }}
+                                    class="prop"
+                                    class:kicsi={elegKicsi}
+                                >
+                                    <VscodeTextField
+                                        value={prop.name}
+                                        onchange={(e) => (prop.name = e.target.value)}
+                                    />
+
+                                    <div class="label-wr">
+                                        <VscodeTextField bind:value={prop.type} {children} />
+                                        {#snippet children()}
+                                            <div
+                                                slot="end"
+                                                class="fl"
+                                                class:active={prop.nullable}
+                                                onclick={() => {
+                                                    prop.nullable = !prop.nullable;
+                                                    setRawText();
+                                                }}
+                                            >
+                                                Null
+                                            </div>
+                                        {/snippet}
+                                    </div>
+
+                                    <!-- <VscodeCheckbox bind:checked={prop.nullable} /> -->
+
+                                    <div class="label-wr">
+                                        <VscodeTextField bind:value={prop.value} {children} />
+                                        {#snippet children()}
+                                            <div
+                                                slot="end"
+                                                class="fl"
+                                                class:active={prop.bindable}
+                                                onclick={() => {
+                                                    prop.bindable = !prop.bindable;
+                                                    setRawText();
+                                                }}
+                                            >
+                                                Bind
+                                            </div>
+                                        {/snippet}
+                                    </div>
+
+                                    <div
+                                        class="delete"
+                                        style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;"
+                                    >
+                                        <VscodeButton
+                                            appearance="icon"
+                                            type="button"
+                                            onclick={() => {
+                                                props = props.filter((item, j) => i != j);
+                                                setRawText();
+                                            }}
+                                        >
+                                            <DeleteIcon size="13" />
+                                        </VscodeButton>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    </form>
+                {:else if view === 'textarea'}
+                    <textarea class="textarea" value={propString} onchange={textAreaChange} />
+                {:else if view === 'test'}
+                    <Test {rawText} />
+                {/if}
+            </div>
+
+            <div class="buttons">
+                <span style="grid-area: fejlec;">
+                    <VscodeButton type="button" style="width: 100%;" onclick={addProp}>
+                        + Prop
+                    </VscodeButton>
+                </span>
+
+                <VscodeButton type="button" onclick={addEvent}>+ Event</VscodeButton>
+
+                <VscodeButton type="button" onclick={addSnippet}>+ Snippet</VscodeButton>
+            </div>
         </div>
-    {/each}
 
-    <button type="button" onclick={addProp}>Add</button>
-</form>
-
-<datalist id="types">
-    <option value="string" />
-    <option value="number" />
-    <option value="boolean" />
-    <option value="() => any | Promise<any>" />
-</datalist>
-
-{#if test}
-    <pre>{rawText}</pre>
-{/if}
+        {#if test}
+            <pre>{rawText}</pre>
+        {/if}
+    {:else}
+        <div class="nemjo">Ez nem egy .svelte fájl!</div>
+    {/if}
+</div>
 
 <style lang="scss">
-    .text {
-        width: 80px;
-    }
-
-    textarea {
-        width: 100%;
-    }
-
-    * {
+    :global(*) {
         box-sizing: border-box;
     }
 
-    :root {
-        --vscode-button-background: red;
-    }
-
-    /* default */
-
-    body {
-        background-color: var(--vscode-editor-background);
-        color: var(--vscode-editor-foreground);
-        font-family: var(--vscode-font-family);
-        font-size: var(--vscode-font-size);
+    :global(body) {
         margin: 0;
         padding: 0;
     }
 
-    input[type='text'],
-    textarea {
-        background-color: var(--vscode-input-background);
-        color: var(--vscode-input-foreground);
-        border: 1px solid var(--vscode-input-border);
+    .head {
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        .end {
+            margin-left: auto;
+        }
     }
 
-    input::placeholder,
-    textarea::placeholder {
-        color: var(--vscode-input-placeholderForeground);
-    }
-
-    textarea {
-        resize: vertical;
-        min-height: 100px;
-    }
-
-    input[type='checkbox'] {
-        width: 16px;
-        height: 16px;
-        background-color: var(--vscode-checkbox-background, var(--vscode-input-background));
-        border: 1px solid var(--vscode-checkbox-border, var(--vscode-input-border));
-        accent-color: var(--vscode-checkbox-foreground, var(--vscode-input-foreground));
-    }
-
-    button {
-        background-color: var(--vscode-button-background);
-        color: var(--vscode-button-foreground);
-        border: none;
-        padding: 0.6em 1.2em;
-        border-radius: 4px;
+    .hidden-button {
+        background-color: unset;
+        border: unset;
+        border: unset;
+        font: inherit;
+        padding: unset;
         cursor: pointer;
-        font-weight: bold;
+        color: unset;
+        &:hover {
+            background-color: var(--button-icon-hover-background);
+        }
     }
 
-    button:hover {
-        background-color: var(--vscode-button-hoverBackground);
+    /* :root {
+        --design-unit: 2 !important;
+    } */
+
+    .textarea {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        box-sizing: border-box;
+        position: relative;
+        color: var(--input-foreground);
+        background: var(--input-background);
+        border-radius: calc(var(--corner-radius-round) * 1px);
+        border: calc(var(--border-width) * 1px) solid var(--dropdown-border);
+        font-style: inherit;
+        font-variant: inherit;
+        font-weight: inherit;
+        font-stretch: inherit;
+        font-family: inherit;
+        font-size-adjust: inherit;
+        font-kerning: inherit;
+        font-optical-sizing: inherit;
+        font-language-override: inherit;
+        font-feature-settings: inherit;
+        font-variation-settings: inherit;
+        font-size: var(--type-ramp-base-font-size);
+        line-height: var(--type-ramp-base-line-height);
+        /* padding: calc(var(--design-unit) * 2px + 1px); */
+        min-width: var(--input-min-width);
+        resize: none;
+        outline: unset;
+        display: block;
+
+        &:focus {
+            background: var(--input-background);
+            border-color: var(--focus-border);
+        }
+    }
+
+    .flex {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+
+        .middle {
+            flex-grow: 1;
+            overflow: auto;
+        }
+    }
+
+    .buttons {
+        display: grid;
+        grid-template-areas:
+            'fejlec fejlec'
+            'baloldal jobboldal';
+        gap: 6px;
+        margin-top: 6px;
+    }
+
+    .fl {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px;
+        cursor: pointer;
+        transition: 0.15s;
+        font-size: 10px;
+
+        &:not(:hover) {
+            color: var(--input-placeholder-foreground);
+        }
+        &.active {
+            color: var(--link-active-foreground);
+        }
+    }
+
+    .bg {
+        height: 100dvh;
+        padding: 8px;
+
+        &.test {
+            background-color: var(--vscode-menu-background);
+            color: var(--vscode-menu-foreground);
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+        }
+
+        .nemjo {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    }
+
+    .label-wr {
+        position: relative;
+        display: flex;
+    }
+
+    .props {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .prop {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 20px;
+        --design-unit: 0.5;
+        --input-height: 20;
+        --type-ramp-base-font-size: 10px;
+        --input-min-width: 60px;
     }
 </style>

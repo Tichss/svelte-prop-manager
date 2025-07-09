@@ -15,8 +15,12 @@
     "sass": "^1.86.3",
     "svelte": "^5.20.2",
     "svelte-check": "^4.1.4",
+    "svelte-google-materialdesign-icons": "^1.0.5",
     "typescript": "~5.7.2",
     "vite": "^6.2.0",
     "vite-plugin-singlefile": "^2.2.0"
+  },
+  "dependencies": {
+    "@vscode/webview-ui-toolkit": "^1.4.0"
   }
 }

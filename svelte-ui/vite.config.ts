@@ -10,4 +10,9 @@ export default defineConfig({
         outDir: path.resolve(__dirname, '../media'),
         emptyOutDir: true,
     },
+    resolve: {
+        alias: {
+            $lib: path.resolve(__dirname, 'src/lib'),
+        },
+    },
 });

@@ -25,3 +25,5 @@ media
 *.njsproj
 *.sln
 *.sw?
+
+*.vsix
