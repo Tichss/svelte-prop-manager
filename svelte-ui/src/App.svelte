@@ -1,17 +1,19 @@
 <script lang="ts">
-    import { untrack } from 'svelte';
+    import { tick, untrack } from 'svelte';
     import '$lib/vscode.css';
     import type { Message, Prop } from '$lib/type';
     import VscodeButton from '$lib/ui/VscodeButton.svelte';
-    import VscodeTextField from '$lib/ui/VscodeTextField.svelte';
-    import DeleteIcon from 'svelte-google-materialdesign-icons/Delete.svelte';
+    import GridIcon from 'svelte-google-materialdesign-icons/Grid_view.svelte';
+    import RowIcon from 'svelte-google-materialdesign-icons/Notes.svelte';
+    import MentesIcon from 'svelte-google-materialdesign-icons/Save.svelte';
     import ActiveButton from '$lib/ui/ActiveButton.svelte';
     import ToggleButtonGroup from '$lib/ToggleButton/ToggleButtonGroup.svelte';
     import ToggleButton from '$lib/ToggleButton/ToggleButton.svelte';
     import { flip } from 'svelte/animate';
-    import { insertAfterLastImport } from '$lib/functions';
+    import { insertAfterLastImport, uuid } from '$lib/functions';
     import Test from '$lib/pages/Test.svelte';
     import TestButtons from '$lib/TestButtons.svelte';
+    import PropRow from '$lib/PropRow.svelte';
 
     let rawText = $state('');
     let test = $state(import.meta.env.DEV);
@@ -25,7 +27,7 @@
     let props: Prop[] = $state([]);
 
     async function getPropNameList() {
-        props = [];
+        // props = [];
 
         const propsRegex = /let\s*{([\s\S]+?)}\s*:\s*(\w+)\s*=\s*\$props\(\);/;
 
@@ -41,14 +43,14 @@
 
             for (let i = 0; i < existingProps.length; i++) {
                 const stringProp = existingProps[i];
-                props[i] = {};
+                props[i] = { id: props?.[i]?.id ?? uuid() };
 
                 let [name, val] = stringProp.split('=');
 
                 name = name.trim();
                 val = val?.trim();
 
-                props[i].id = name;
+                /* props[i].id ??= uuid(); */
                 props[i].name = name;
                 props[i].bindable = val?.startsWith('$bindable(');
 
@@ -109,14 +111,18 @@
         }
     }
 
+    function submit() {
+        form?.requestSubmit();
+    }
+
     function setRawText() {
         const propsRegex = /let\s*({[\s\S]*?})\s*:\s*([\w\d_]+)\s*=\s*\$props\(\);/;
 
         let _rawText = rawText;
 
         if (!propsRegex.test(_rawText)) {
-            let interface2 = `interface Props { }`;
-            let prop = `let { }:Props = $props();`;
+            let interface2 = `interface Props { var0?: string }`;
+            let prop = `let { var0 = $bindable() }:Props = $props();`;
 
             _rawText = insertAfterLastImport(_rawText, [interface2, prop]);
         }
@@ -124,8 +130,6 @@
         const talalat = propsRegex.exec(_rawText);
 
         if (talalat) {
-            console.log('Talált szöveg:', talalat);
-
             const wholeProps = talalat[0];
             const propListWithBrackets = talalat[1];
             const interfaceName = talalat[2];
@@ -160,8 +164,6 @@
 
             let finalStr = propStrArr.join(valaszto);
             finalStr = `{${spacekLead}${finalStr}${spacekEnd}}`;
-            console.log('propListWithBrackets', propListWithBrackets);
-            console.log('finalStr', finalStr);
 
             let temp = wholeProps.replace(propListWithBrackets, finalStr);
 
@@ -180,8 +182,6 @@
             const talalat2 = interfaceRegex.exec(_rawText);
 
             if (talalat2) {
-                // console.log('talalat2', talalat2);
-
                 const wholeTypes = talalat2[0];
                 const typeListWithBrackets = talalat2[1];
                 const typeList = typeListWithBrackets.slice(1, -1);
@@ -269,40 +269,51 @@
         return [firstPart, secondPart] as const;
     }
 
-    function addProp() {
+    async function addProp() {
         let count = getNextPostfix(
             props.map((p) => p.name),
             'var'
         );
 
+        let id = uuid();
+        let name = `var${count}`;
+
         let newProp = {
-            id: `var${count}`,
-            name: `var${count}`,
+            id: id,
+            name: name,
             type: 'string',
             nullable: true,
             bindable: false,
         };
 
         let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
-        console.log(insertIndex);
 
         if (insertIndex > -1) {
             props.splice(insertIndex, 0, newProp);
         } else {
             props.push(newProp);
         }
-        setRawText();
+
+        await tick();
+        let el = document.getElementById(`name-${newProp.id}`);
+        el?.focus();
+        el?.select();
+        // setRawText();
+        submit();
     }
 
-    function addEvent() {
+    async function addEvent() {
         let count = getNextPostfix(
             props.map((p) => p.name),
             'onEvent'
         );
 
+        let id = uuid();
+        let name = `onEvent${count}`;
+
         let newProp = {
-            id: `onEvent${count}`,
-            name: `onEvent${count}`,
+            id: id,
+            name: name,
             type: '() => any',
             nullable: true,
             bindable: false,
@@ -316,18 +327,27 @@
             props.push(newProp);
         }
 
-        setRawText();
+        await tick();
+        let el = document.getElementById(`name-${newProp.id}`);
+        el?.focus();
+        el?.select();
+
+        // setRawText();
+        submit();
     }
 
-    function addSnippet() {
+    async function addSnippet() {
         let index = getNextPostfix(
             props.map((p) => p.name),
             'snippet'
         );
 
+        let id = uuid();
+        let name = `snippet${index}`;
+
         let newProp = {
-            id: `snippet${index}`,
-            name: `snippet${index}`,
+            id: id,
+            name: name,
             type: `import('svelte').Snippet<[any]>`,
             nullable: true,
             bindable: false,
@@ -340,7 +360,14 @@
         } else {
             props.push(newProp);
         }
-        setRawText();
+
+        await tick();
+        let el = document.getElementById(`name-${newProp.id}`);
+        el?.focus();
+        el?.select();
+
+        // setRawText();
+        submit();
     }
 
     function order() {
@@ -359,7 +386,8 @@
             return orderA - orderB;
         });
 
-        setRawText();
+        // setRawText();
+        submit();
     }
 
     function getNextPostfix(arr: string[], prefix: string) {
@@ -429,8 +457,6 @@
 
             let [namePlusType, value] = str.split(/=(?!>)/);
 
-            console.log(namePlusType, value);
-
             if (value) {
                 value = value.trim();
 
@@ -454,11 +480,12 @@
                 name = name.slice(0, -1);
             }
 
-            prop.id = name;
+            prop.id = uuid();
             prop.name = name;
             prop.type = type;
         }
-        setRawText();
+        // setRawText();
+        submit();
     }
 
     function postMsg(msg: Message) {
@@ -479,11 +506,13 @@
     }
 
     let propsWidth: number | undefined = $state();
-    const elegKicsi = $derived((propsWidth ?? 10000) < 350);
+    const elegKicsi = $derived((propsWidth ?? 10000) < 230);
 
     let savedDatas = $state<{ autoSave?: boolean }>({});
     let autoSave: boolean = $state(false);
     let view: 'grid' | 'textarea' | 'test' = $state('grid');
+
+    let form: HTMLFormElement | undefined = $state();
 </script>
 
 <svelte:window
@@ -518,15 +547,17 @@
                         postMsg({ command: 'save', data: savedDatas });
                     }}
                 >
-                    Auto mentés
+                    <MentesIcon size="10" />
                 </ActiveButton>
 
-                <ActiveButton onClick={order}>Rendezés</ActiveButton>
+                <div class="last">
+                    <ActiveButton onClick={order}>Rendezés</ActiveButton>
+                </div>
 
                 <div class="end">
                     <ToggleButtonGroup bind:value={view}>
-                        <ToggleButton value="grid">grid</ToggleButton>
-                        <ToggleButton value="textarea">sor</ToggleButton>
+                        <ToggleButton value="grid"><GridIcon size="10" /></ToggleButton>
+                        <ToggleButton value="textarea"><RowIcon size="10" /></ToggleButton>
                         {#if test}
                             <ToggleButton value="test">test</ToggleButton>
                         {/if}
@@ -536,83 +567,39 @@
 
             <div class="middle">
                 {#if view === 'grid'}
-                    <form action="" onchange={setRawText}>
+                    <form
+                        bind:this={form}
+                        action=""
+                        onchange={() => {
+                            form?.requestSubmit();
+                        }}
+                        onsubmit={(e) => {
+                            e.preventDefault();
+                            setRawText();
+                        }}
+                    >
                         <div class="props" bind:clientWidth={propsWidth}>
                             {#each props as prop, i (prop.id)}
-                                <div
-                                    animate:flip={{ duration: 250 }}
-                                    class="prop"
-                                    class:kicsi={elegKicsi}
-                                >
-                                    <VscodeTextField
-                                        value={prop.name}
-                                        onchange={(e) => (prop.name = e.target.value)}
+                                <div animate:flip={{ duration: 250 }}>
+                                    <PropRow
+                                        bind:prop={props[i]}
+                                        bind:props
+                                        kicsi={elegKicsi}
+                                        onSubmit={() => submit()}
                                     />
-
-                                    <div class="label-wr">
-                                        <VscodeTextField bind:value={prop.type} {children} />
-                                        {#snippet children()}
-                                            <div
-                                                slot="end"
-                                                class="fl"
-                                                class:active={prop.nullable}
-                                                onclick={() => {
-                                                    prop.nullable = !prop.nullable;
-                                                    setRawText();
-                                                }}
-                                            >
-                                                Null
-                                            </div>
-                                        {/snippet}
-                                    </div>
-
-                                    <!-- <VscodeCheckbox bind:checked={prop.nullable} /> -->
-
-                                    <div class="label-wr">
-                                        <VscodeTextField bind:value={prop.value} {children} />
-                                        {#snippet children()}
-                                            <div
-                                                slot="end"
-                                                class="fl"
-                                                class:active={prop.bindable}
-                                                onclick={() => {
-                                                    prop.bindable = !prop.bindable;
-                                                    setRawText();
-                                                }}
-                                            >
-                                                Bind
-                                            </div>
-                                        {/snippet}
-                                    </div>
-
-                                    <div
-                                        class="delete"
-                                        style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;"
-                                    >
-                                        <VscodeButton
-                                            appearance="icon"
-                                            type="button"
-                                            onclick={() => {
-                                                props = props.filter((item, j) => i != j);
-                                                setRawText();
-                                            }}
-                                        >
-                                            <DeleteIcon size="13" />
-                                        </VscodeButton>
-                                    </div>
                                 </div>
                             {/each}
                         </div>
                     </form>
                 {:else if view === 'textarea'}
-                    <textarea class="textarea" value={propString} onchange={textAreaChange} />
+                    <textarea class="input textarea" value={propString} onchange={textAreaChange} />
                 {:else if view === 'test'}
                     <Test {rawText} />
                 {/if}
             </div>
 
             <div class="buttons">
-                <span style="grid-area: fejlec;">
+                <span>
                     <VscodeButton type="button" style="width: 100%;" onclick={addProp}>
                         + Prop
                     </VscodeButton>
@@ -624,9 +611,9 @@
             </div>
         </div>
 
-        {#if test}
+        <!--  {#if test}
             <pre>{rawText}</pre>
-        {/if}
+        {/if} -->
     {:else}
         <div class="nemjo">Ez nem egy .svelte fájl!</div>
     {/if}
@@ -647,9 +634,10 @@
         display: flex;
         align-items: center;
         gap: 4px;
+        flex-wrap: wrap;
 
-        .end {
-            margin-left: auto;
+        .last {
+            margin-right: auto;
         }
     }
 
@@ -670,9 +658,8 @@
         --design-unit: 2 !important;
     } */
 
-    .textarea {
-        height: 100%;
-        width: 100%;
+    .input {
+        --type-ramp-base-font-size: 10px;
         margin: 0;
         box-sizing: border-box;
         position: relative;
@@ -693,16 +680,20 @@
         font-variation-settings: inherit;
         font-size: var(--type-ramp-base-font-size);
         line-height: var(--type-ramp-base-line-height);
-        /* padding: calc(var(--design-unit) * 2px + 1px); */
         min-width: var(--input-min-width);
-        resize: none;
         outline: unset;
-        display: block;
 
         &:focus {
             background: var(--input-background);
             border-color: var(--focus-border);
         }
+    }
+
+    .textarea {
+        height: 100%;
+        width: 100%;
+        resize: none;
+        display: block;
     }
 
     .flex {
@@ -712,7 +703,8 @@
 
         .middle {
             flex-grow: 1;
-            overflow: auto;
+            overflow: hidden;
+            overflow-y: auto;
         }
     }
 
@@ -721,24 +713,17 @@
         grid-template-areas:
             'fejlec fejlec'
             'baloldal jobboldal';
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 6px;
         margin-top: 6px;
-    }
 
-    .fl {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2px;
-        cursor: pointer;
-        transition: 0.15s;
-        font-size: 10px;
-
-        &:not(:hover) {
-            color: var(--input-placeholder-foreground);
+        span {
+            grid-area: fejlec;
         }
-        &.active {
-            color: var(--link-active-foreground);
+
+        @media only screen and (max-width: 200px) {
+            display: flex;
+            flex-direction: column;
         }
     }
 
@@ -762,26 +747,9 @@
         }
     }
 
-    .label-wr {
-        position: relative;
-        display: flex;
-    }
-
     .props {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-    }
-
-    .prop {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        height: 20px;
-        --design-unit: 0.5;
-        --input-height: 20;
-        --type-ramp-base-font-size: 10px;
-        --input-min-width: 60px;
+        gap: 3px;
     }
 </style>

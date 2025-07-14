@@ -11,6 +11,3 @@ export type Prop = {
     bindable?: boolean;
     nullable?: boolean;
 };
-
-
-

@@ -88,6 +88,7 @@
         border: 1px solid white;
         border-left: unset;
         color: inherit;
+        font-size: 11px;
 
         &:hover {
             background-color: rgb(86, 86, 86);

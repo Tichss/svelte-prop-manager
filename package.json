@@ -2,12 +2,13 @@
     "name": "svelte-prop-manager",
     "displayName": "Svelte Prop Manager",
     "description": "Kezeld és szerkeszd a Svelte komponens propokat könnyedén.",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "icon": "images/icon.png",
     "publisher": "tichss",
     "engines": {
         "vscode": "^1.70.0"
     },
+    "repository": "https://github.com/Tichss/svelte-prop-manager",
     "activationEvents": [],
     "main": "./out/extension.js",
     "contributes": {
@@ -38,7 +39,8 @@
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src",
         "test": "vscode-test",
-        "build": "cd svelte-ui && npm run build && cd.."
+        "build": "vsce package",
+        "build-ui": "cd svelte-ui && npm run build && cd.."
     },
     "devDependencies": {
         "@types/node": "^22.15.3",

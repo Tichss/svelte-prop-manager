@@ -20,6 +20,7 @@
         border: 1px solid white;
         color: inherit;
         border-radius: 4px;
+        font-size: 11px;
 
         &:hover {
             background-color: rgb(86, 86, 86);
