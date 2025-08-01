@@ -24,10 +24,10 @@
         vscode = (window as any).acquireVsCodeApi();
     }
 
-    let props: Prop[] = $state([]);
+    let props = $state<Prop[]>([]);
 
     async function getPropNameList() {
-        // props = [];
+        props = [];
 
         const propsRegex = /let\s*{([\s\S]+?)}\s*:\s*(\w+)\s*=\s*\$props\(\);/;
 
@@ -43,7 +43,7 @@
 
             for (let i = 0; i < existingProps.length; i++) {
                 const stringProp = existingProps[i];
-                props[i] = { id: props?.[i]?.id ?? uuid() };
+                props[i] = {};
 
                 let [name, val] = stringProp.split('=');
 
@@ -106,6 +106,12 @@
                     }
                 }
             }
+
+            let lastProp = props.at(-1);
+            let el = document.getElementById(`name-${lastProp?.name}`) as HTMLInputElement;
+            el?.focus();
+            el?.select();
+            /* ide */
         } else {
             ('nincs props');
         }
@@ -121,8 +127,8 @@
         let _rawText = rawText;
 
         if (!propsRegex.test(_rawText)) {
-            let interface2 = `interface Props { var0?: string }`;
-            let prop = `let { var0 = $bindable() }:Props = $props();`;
+            let interface2 = `interface Props { var0?: string; props?: Prop[]; kicsi?: boolean; onSubmit?: () => any }`;
+            let prop = `let { var0 = $bindable(), props = $bindable(), kicsi, onSubmit }:Props = $props();`;
 
             _rawText = insertAfterLastImport(_rawText, [interface2, prop]);
         }
@@ -269,105 +275,70 @@
         return [firstPart, secondPart] as const;
     }
 
-    async function addProp() {
+    let insertId = 0;
+
+    async function inserto(prop: Prop) {
+        insertId++;
+        let courrentId = insertId;
+        let name = prop.name;
+
         let count = getNextPostfix(
             props.map((p) => p.name),
-            'var'
+            name
         );
 
-        let id = uuid();
-        let name = `var${count}`;
+        if (count > 0) {
+            name += count;
+        }
 
-        let newProp = {
-            id: id,
-            name: name,
+        prop.name = name;
+
+        let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
+
+        if (insertIndex > -1) {
+            props.splice(insertIndex, 0, prop);
+        } else {
+            props.push(prop);
+        }
+
+        submit();
+
+        /* setTimeout(() => {
+            if (insertId == courrentId) {
+                let el = document.getElementById(`name-${prop.name}`);
+                el?.focus();
+                el?.select();
+            }
+        }, 100); */
+    }
+
+    async function addProp() {
+        console.log('clcik');
+
+        inserto({
+            name: 'var',
             type: 'string',
             nullable: true,
             bindable: false,
-        };
-
-        let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
-
-        if (insertIndex > -1) {
-            props.splice(insertIndex, 0, newProp);
-        } else {
-            props.push(newProp);
-        }
-
-        await tick();
-        let el = document.getElementById(`name-${newProp.id}`);
-        el?.focus();
-        el?.select();
-        // setRawText();
-        submit();
+        });
     }
 
     async function addEvent() {
-        let count = getNextPostfix(
-            props.map((p) => p.name),
-            'onEvent'
-        );
-
-        let id = uuid();
-        let name = `onEvent${count}`;
-
-        let newProp = {
-            id: id,
-            name: name,
+        inserto({
+            name: 'onEvent',
             type: '() => any',
             nullable: true,
             bindable: false,
-        };
-
-        let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
-
-        if (insertIndex > -1) {
-            props.splice(insertIndex, 0, newProp);
-        } else {
-            props.push(newProp);
-        }
-
-        await tick();
-        let el = document.getElementById(`name-${newProp.id}`);
-        el?.focus();
-        el?.select();
-
-        // setRawText();
-        submit();
+        });
     }
 
     async function addSnippet() {
-        let index = getNextPostfix(
-            props.map((p) => p.name),
-            'snippet'
-        );
-
-        let id = uuid();
-        let name = `snippet${index}`;
-
-        let newProp = {
-            id: id,
-            name: name,
+        inserto({
+            name: 'snippet',
             type: `import('svelte').Snippet<[any]>`,
             nullable: true,
             bindable: false,
-        };
-
-        let insertIndex = props.findIndex((prop) => prop.name.startsWith('...'));
-
-        if (insertIndex > -1) {
-            props.splice(insertIndex, 0, newProp);
-        } else {
-            props.push(newProp);
-        }
-
-        await tick();
-        let el = document.getElementById(`name-${newProp.id}`);
-        el?.focus();
-        el?.select();
-
-        // setRawText();
-        submit();
+        });
     }
 
     function order() {
@@ -490,7 +461,7 @@
 
     function postMsg(msg: Message) {
         let _msg = $state.snapshot(msg);
-        console.log('DP MEASSGE', _msg);
+        /* console.log('DP MEASSGE', _msg); */
         vscode?.postMessage(_msg);
     }
 
@@ -579,15 +550,13 @@
                         }}
                     >
                         <div class="props" bind:clientWidth={propsWidth}>
-                            {#each props as prop, i (prop.id)}
-                                <div animate:flip={{ duration: 250 }}>
-                                    <PropRow
-                                        bind:prop={props[i]}
-                                        bind:props
-                                        kicsi={elegKicsi}
-                                        onSubmit={() => submit()}
-                                    />
-                                </div>
+                            {#each props as prop, i}
+                                <PropRow
+                                    bind:prop={props[i]}
+                                    bind:props
+                                    kicsi={elegKicsi}
+                                    onSubmit={() => submit()}
+                                />
                             {/each}
                         </div>
                     </form>

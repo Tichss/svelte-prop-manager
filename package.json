@@ -2,7 +2,7 @@
     "name": "svelte-prop-manager",
     "displayName": "Svelte Prop Manager",
     "description": "Kezeld és szerkeszd a Svelte komponens propokat könnyedén.",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "icon": "images/icon.png",
     "publisher": "tichss",
     "engines": {
@@ -39,8 +39,8 @@
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src",
         "test": "vscode-test",
-        "build": "vsce package",
-        "build-ui": "cd svelte-ui && npm run build && cd.."
+        "build": "npm version patch --no-git-tag-version && vsce package",
+        "build:ui": "cd svelte-ui && npm run build && cd.."
     },
     "devDependencies": {
         "@types/node": "^22.15.3",

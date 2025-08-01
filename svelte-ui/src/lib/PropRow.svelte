@@ -18,7 +18,7 @@
             <input
                 required
                 class="input"
-                id="name-{prop.id}"
+                id="name-{prop.name}"
                 value={prop.name}
                 onchange={(e) => (prop.name = e.target.value)}
             />
