@@ -1,15 +1,16 @@
 <script lang="ts">
     import type { Prop } from '$lib/type';
     import VscodeButton from '$lib/ui/VscodeButton.svelte';
+    import { tick } from 'svelte';
     import DeleteIcon from 'svelte-google-materialdesign-icons/Delete.svelte';
 
     interface Props {
         prop: Prop;
-        props?: Prop[];
         kicsi?: boolean;
         onSubmit?: () => any;
+        onDelete?: () => any;
     }
-    let { prop = $bindable(), props = $bindable(), kicsi, onSubmit }: Props = $props();
+    let { prop = $bindable(), kicsi, onSubmit, onDelete }: Props = $props();
 </script>
 
 <div class="prop" class:kicsi>
@@ -65,12 +66,8 @@
             tabindex="-1"
             appearance="icon"
             type="button"
-            onclick={() => {
-                const i = props?.indexOf(prop) ?? -1;
-                if (i > -1) {
-                    props?.splice(i, 1);
-                    onSubmit?.();
-                }
+            onclick={async () => {
+                onDelete?.();
             }}
         >
             <DeleteIcon size="13" />

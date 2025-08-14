@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { tick, untrack } from 'svelte';
+    import { untrack } from 'svelte';
     import '$lib/vscode.css';
     import type { Message, Prop } from '$lib/type';
     import VscodeButton from '$lib/ui/VscodeButton.svelte';
@@ -25,6 +25,8 @@
     }
 
     let props = $state<Prop[]>([]);
+
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     async function getPropNameList() {
         props = [];
@@ -107,11 +109,12 @@
                 }
             }
 
-            let lastProp = props.at(-1);
-            let el = document.getElementById(`name-${lastProp?.name}`) as HTMLInputElement;
-            el?.focus();
-            el?.select();
-            /* ide */
+            if (focusable) {
+                let lastProp = props.at(-1);
+                let el = document.getElementById(`name-${lastProp?.name}`) as HTMLInputElement;
+                el?.focus();
+                el?.select();
+            }
         } else {
             ('nincs props');
         }
@@ -127,7 +130,7 @@
         let _rawText = rawText;
 
         if (!propsRegex.test(_rawText)) {
-            let interface2 = `interface Props { var0?: string; props?: Prop[]; kicsi?: boolean; onSubmit?: () => any }`;
+            let interface2 = `interface Props { var0: string; props?: Prop[]; kicsi?: boolean; onSubmit?: () => any }`;
             let prop = `let { var0 = $bindable(), props = $bindable(), kicsi, onSubmit }:Props = $props();`;
 
             _rawText = insertAfterLastImport(_rawText, [interface2, prop]);
@@ -275,6 +278,8 @@
         return [firstPart, secondPart] as const;
     }
 
+    let focusable = false;
+
     let insertId = 0;
 
     async function inserto(prop: Prop) {
@@ -303,18 +308,12 @@
 
         submit();
 
-        /* setTimeout(() => {
-            if (insertId == courrentId) {
-                let el = document.getElementById(`name-${prop.name}`);
-                el?.focus();
-                el?.select();
-            }
-        }, 100); */
+        focusable = true;
+        await sleep(1000);
+        focusable = false;
     }
 
     async function addProp() {
-        console.log('clcik');
-
         inserto({
             name: 'var',
             type: 'string',
@@ -415,7 +414,7 @@
         });
     });
 
-    function textAreaChange(e) {
+    async function textAreaChange(e) {
         let val = e.target.value as string;
         let strArr = val.split(';').filter((n) => n.trim() !== '');
 
@@ -553,9 +552,14 @@
                             {#each props as prop, i}
                                 <PropRow
                                     bind:prop={props[i]}
-                                    bind:props
                                     kicsi={elegKicsi}
-                                    onSubmit={() => submit()}
+                                    onSubmit={() => {
+                                        submit();
+                                    }}
+                                    onDelete={async () => {
+                                        props?.splice(i, 1);
+                                        submit();
+                                    }}
                                 />
                             {/each}
                         </div>
